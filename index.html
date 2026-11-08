@@ -321,7 +321,7 @@ stopPresence();
 unsubs.forEach(u=>{try{u();}catch(e){}});unsubs=[];
 try{if(roomCh&&roomCh.leave)roomCh.leave();}catch(e){}
 roomCh=null;clearTimeout(loadTimer);
-docId=null;meta=null;els=new Map();imgs=new Map();sel=null;editing=null;curSlide=null;nodes.clear();
+docId=null;meta=null;els=new Map();imgs=new Map();sel=null;editing=null;curSlide=null;nodes.clear();document.querySelectorAll('#page > .el').forEach(n=>n.remove());
 dirtyEls.clear();inflight.clear();wTimers.forEach(t=>clearTimeout(t));wTimers.clear();eTimers.forEach(t=>clearTimeout(t));eTimers.clear();
 metaLoaded=false;metaDirty=false;
 $('#peers').innerHTML='';
@@ -386,7 +386,7 @@ if(!loc||tsv(d.ts)>=tsv(loc.ts))els.set(id,Object.assign({},d));
 scheduleRender();
 },dbErr));
 unsubs.push(db.collection(P.imgs()).onSnapshot(snap=>{
-snap.docChanges().forEach(ch=>{if(ch.type==='removed')imgs.delete(ch.doc.id);else{const d=ch.doc.data();if(d&&typeof d.d==='string'&&d.d.startsWith('data:image/'))imgs.set(ch.doc.id,d.d);}});
+snap.docChanges().forEach(ch=>{if(ch.type==='removed')imgs.delete(ch.doc.id);else{const d=ch.doc.data();if(d&&typeof d.d==='string'&&d.d.startsWith('data:'))imgs.set(ch.doc.id,d.d);}});
 sigCache.clear();scheduleRender();if(tab==='image')renderPanel();
 },dbErr));
 }catch(e){loadMsg('No se pudo conectar con la base de datos.',true);}
@@ -544,6 +544,9 @@ c.innerHTML='';
 cs.background=fillv(e.fill,'#7c3aed');const sw=num(e.sw,0,0,40);
 cs.border=sw?`${sw}px solid ${hex(e.stroke,'#0f172a')}`:'none';cs.boxSizing='border-box';
 cs.borderRadius=e.t==='ellipse'?'50%':(e.t==='rrect'?Math.max(num(e.rad,24,0,400),0)+'px':num(e.rad,0,0,400)+'px');
+}else if(e.t==='file'){
+cs.cssText='width:100%;height:100%;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:0 18px;background:#f1f5f9;border:2px solid #cbd5e1;border-radius:14px;color:#0f172a;font:600 '+Math.max(10,Math.round(num(e.h,90)*.2))+'px Poppins,sans-serif;overflow:hidden;white-space:nowrap';
+c.textContent='';const ic=document.createElement('span');ic.textContent='📎';ic.style.fontSize='1.6em';const nm=document.createElement('span');nm.textContent=String(e.name||'archivo').slice(0,80);nm.style.cssText='overflow:hidden;text-overflow:ellipsis';c.appendChild(ic);c.appendChild(nm);
 }else if(e.t==='img'){
 c.innerHTML='';const src=imgs.get(e.img);
 cs.border='none';cs.borderRadius=num(e.rad,0,0,400)+'px';
@@ -580,6 +583,7 @@ const pg=$('#page');
 const slide=meta.slides.find(s=>s.id===curSlide)||meta.slides[0];if(!slide)return;
 curSlide=slide.id;
 pg.style.width=F.w+'px';pg.style.height=F.h+'px';pg.style.background=bgCss(slide.bg);
+[...pg.children].forEach(n=>{if(n.classList.contains('el')&&nodes.get(n.dataset.id)!==n)n.remove();});
 const list=slideEls(curSlide),keep=new Set();
 list.forEach(([id,e])=>{
 keep.add(id);let n=nodes.get(id);
@@ -642,7 +646,7 @@ select(id);ev.preventDefault();startMove(ev,id);
 });
 $('#page').addEventListener('dblclick',ev=>{
 const nodeEl=ev.target.closest('.el');if(!nodeEl||!canWrite)return;
-const id=nodeEl.dataset.id,e=els.get(id);if(e&&e.t==='text'){select(id);startEdit(id);}
+const id=nodeEl.dataset.id,e=els.get(id);if(e&&e.t==='text'){select(id);startEdit(id);}else if(e&&e.t==='file'){downloadFile(e);}
 });
 function startMove(ev,id){
 const e=els.get(id),p0=pageXY(ev),ox=num(e.x,0),oy=num(e.y,0);let moved=false;
@@ -829,9 +833,9 @@ p.innerHTML=`<h4>Formas</h4><div class="grid" id="shg"></div><h4>Stickers</h4><d
 SHAPES.forEach(([k,ic])=>{const b=document.createElement('button');b.className='gb';b.dataset.shape=k;b.textContent=ic;$('#shg').appendChild(b);});
 EMOJI.forEach(ic=>{const b=document.createElement('button');b.className='gb';b.dataset.emoji=ic;b.textContent=ic;$('#emg').appendChild(b);});
 }else if(tab==='image'){
-p.innerHTML=`<h4>Imágenes</h4><p class="small">Sube una foto de tu computadora o celular. Se reduce automáticamente para que quepa en el documento compartido.</p><button class="btn primary" id="upBtn" style="width:100%;margin-bottom:14px">⬆ Subir imagen</button><input type="file" id="upIn" accept="image/*" class="hidden"><h4>En este documento</h4><div class="imgs" id="imgList"></div>`;
-[...imgs.entries()].forEach(([id,src])=>{const b=document.createElement('button');b.dataset.img=id;b.style.backgroundImage=`url("${src}")`;$('#imgList').appendChild(b);});
-if(!imgs.size)$('#imgList').innerHTML='<p class="small">Aún no hay imágenes.</p>';
+p.innerHTML=`<h4>Imágenes</h4><p class="small">Sube una foto de tu computadora o celular. Se reduce automáticamente para que quepa en el documento compartido.</p><button class="btn primary" id="upBtn" style="width:100%;margin-bottom:14px">⬆ Subir imagen</button><input type="file" id="upIn" accept="image/*" class="hidden"><button class="btn" id="upFileBtn" style="width:100%;margin-bottom:6px">📎 Subir archivo (PDF, Word, Excel…)</button><input type="file" id="upFileIn" class="hidden"><p class="small">Máximo 650 KB por archivo. También puedes arrastrar archivos o pegar imágenes sobre la página.</p><h4>En este documento</h4><div class="imgs" id="imgList"></div>`;
+[...imgs.entries()].filter(([,s])=>s.startsWith('data:image/')).forEach(([id,src])=>{const b=document.createElement('button');b.dataset.img=id;b.style.backgroundImage=`url("${src}")`;$('#imgList').appendChild(b);});
+if(![...imgs.values()].some(s=>s.startsWith('data:image/')))$('#imgList').innerHTML='<p class="small">Aún no hay imágenes.</p>';
 }else if(tab==='bg'){
 p.innerHTML=`<h4>Color de fondo</h4><div class="grid" id="bgc"></div><h4>Degradados</h4><div class="grid2" id="bgg"></div>`;
 SW.forEach(c=>{const b=document.createElement('button');b.className='bgs';b.style.background=c;b.dataset.bg=c;$('#bgc').appendChild(b);});
@@ -857,7 +861,7 @@ addEl(o);return;
 if(t.dataset.emoji){const fs=Math.round(Math.min(F.w,F.h)*.16);addEl({t:'text',x:F.w/2-fs,y:F.h/2-fs,w:fs*2,fs,text:t.dataset.emoji,al:'center',ff:'Arial'});return;}
 if(t.dataset.bg){setBg(t.dataset.bg);return;}
 if(t.dataset.img){addImgEl(t.dataset.img);return;}
-if(t.id==='upBtn'){$('#upIn').click();return;}
+if(t.id==='upBtn'){$('#upIn').click();return;}if(t.id==='upFileBtn'){$('#upFileIn').click();return;}
 });
 $('#panel').addEventListener('change',async ev=>{
 if(ev.target.id!=='upIn')return;const f=ev.target.files&&ev.target.files[0];ev.target.value='';if(!f||!canWrite)return;
@@ -868,6 +872,33 @@ if(db)await db.doc(P.img(id)).set({d:data});
 addImgEl(id);renderPanel();
 }catch(e){toast('No pude leer esa imagen. Prueba con otra.');dbErr(e);}
 });
+function readDataUrl(f){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f);});}
+async function uploadAny(f){
+if(!f||!canWrite||!docId)return;
+try{
+if(f.type&&f.type.startsWith('image/')){
+toast('Procesando imagen…');
+const data=await fileToData(f);const id=uid();imgs.set(id,data);
+if(db)await db.doc(P.img(id)).set({d:data});
+addImgEl(id);if(tab==='image')renderPanel();return;
+}
+if(f.size>650*1024){toast('El archivo pesa más de 650 KB. Usa uno más pequeño (o comprímelo).');return;}
+toast('Subiendo archivo…');
+const data=await readDataUrl(f);const id=uid();imgs.set(id,data);
+if(db)await db.doc(P.img(id)).set({d:data,name:f.name.slice(0,80)});
+const w=Math.round(F.w*.42),h=Math.round(Math.max(70,F.h*.09));
+addEl({t:'file',img:id,name:f.name.slice(0,80),x:Math.round((F.w-w)/2),y:Math.round((F.h-h)/2),w,h});
+toast('Archivo agregado ✓');
+}catch(e){toast('No pude subir ese archivo.');dbErr(e);}
+}
+function downloadFile(e){
+const src=imgs.get(e.img);if(!src){toast('El archivo aún se está cargando…');return;}
+const a=document.createElement('a');a.href=src;a.download=String(e.name||'archivo');document.body.appendChild(a);a.click();a.remove();
+}
+document.addEventListener('change',ev=>{if(ev.target.id!=='upFileIn')return;const f=ev.target.files&&ev.target.files[0];ev.target.value='';uploadAny(f);});
+document.addEventListener('dragover',ev=>{if(docId&&ev.dataTransfer&&[...ev.dataTransfer.types].includes('Files'))ev.preventDefault();});
+document.addEventListener('drop',ev=>{if(!docId||!ev.dataTransfer||!ev.dataTransfer.files.length)return;ev.preventDefault();[...ev.dataTransfer.files].slice(0,5).forEach(uploadAny);});
+document.addEventListener('paste',ev=>{if(!docId||editing)return;const t=ev.target;if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable))return;const fs=ev.clipboardData&&ev.clipboardData.files;if(fs&&fs.length){ev.preventDefault();[...fs].slice(0,3).forEach(uploadAny);}});
 function addImgEl(imgId){
 const src=imgs.get(imgId);if(!src)return;
 const i=new Image();i.onload=()=>{
@@ -915,6 +946,8 @@ h+=`<button class="tb" data-al="left" title="Izquierda">⇤</button><button clas
 h+=colorCtl('col',e.col,'Color');
 }else if(e.t==='img'){
 h+=`<span class="lbl">Esquinas</span><input type="range" data-prop="rad" data-num="1" min="0" max="200" step="2" style="width:90px">`;
+}else if(e.t==='file'){
+h+='<button class="tb" data-act="dl" title="Descargar archivo" style="width:auto;padding:0 10px">⬇ Descargar</button>';
 }else if(e.t==='line'){
 h+=colorCtl('stroke',e.stroke,'Color')+`<span class="lbl">Grosor</span><input type="range" data-prop="sw" data-num="1" min="1" max="24" step="1" style="width:90px">`;
 }else{
@@ -968,7 +1001,7 @@ const a=t.dataset.act;if(!a||!e)return;
 if(a==='fs-'||a==='fs+'){touch(sel,{fs:Math.max(6,Math.min(400,Math.round(num(e.fs,32)+(a==='fs+'?2:-2))))});syncCtx();}
 else if(a==='front'){const m=maxZ();touch(sel,{z:m+1});layer(sel,0);}
 else if(a==='back'){layer(sel,-1);}
-else if(a==='dup')dupEl(sel);
+else if(a==='dl')downloadFile(e);else if(a==='dup')dupEl(sel);
 else if(a==='del'){removeEl(sel);buildCtx();scheduleStrip();}
 });
 /* paleta flotante: posiciona el popover bajo el botón */
